@@ -1,35 +1,36 @@
-import sys
-import os
-import numpy as np
-from datetime import datetime, timezone, date
-from time import time
-from sys import exit
-import pathlib
-
 import csv
-from colour import Color
+import matplotlib
+import matplotlib.cm as cm
+import matplotlib.collections as collections
+import matplotlib.pyplot as plt
 import ntpath
-
+import numpy as np
+import os
+import pandas as pd
+import pathlib
 import sklearn
-from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
+import sys
+import time
 
+from colour import Color
+from datetime import datetime, timezone, date
+from matplotlib.collections import LineCollection
+from matplotlib.colors import ListedColormap
 from scipy.spatial import Delaunay
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from sys import exit
+from enum import IntEnum
 
 # Random state.
 RS = 14545
-
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import matplotlib
-from matplotlib.collections import LineCollection
-from matplotlib.colors import ListedColormap
-import matplotlib.collections as collections
-
-
 prepare_data_per_days = None
-
 days = []
+
+
+class CalcMethod(IntEnum):
+    DELAUNAY = 0  # Метод Делоне.
+    SUBSEQUENT = 1  # Метод последовательной триангуляции.
 
 
 def rolling_filter(arr: np.ndarray, win, func, axis):
@@ -1014,18 +1015,16 @@ def delaunay_per_day(coordinates: np.ndarray, v_data: np.ndarray, t_data: np.nda
 
 
 def pretty_delaunay(
-    coords: np.ndarray,
+    pca_data: np.ndarray,
     v_data: np.ndarray,
     t_data: np.ndarray,
     file_name,
     labels,
     images_path,
 ):
-    dir_name = f"{images_path}/tr/" + file_name
-    if not os.path.isdir(dir_name):
-        os.makedirs(dir_name, exist_ok=True)
+    """Функция использует метод Делоне"""
 
-    delaunay_arr = delaunay_per_day(coords, v_data, t_data)
+    delaunay_arr = delaunay_per_day(pca_data, v_data, t_data)
 
     sq_arr = []
     del_count = []
@@ -1122,240 +1121,92 @@ def main(args):
     path = os.getcwd()
     print("The current working directory is %s" % path)
 
-    suffix = "_attack"
-
-    images_path = "images" + suffix
-    export_path = "export" + suffix
-    if not os.path.isdir(images_path):
-        os.mkdir(images_path)
-    if not os.path.isdir(f"{images_path}/tr"):
-        os.mkdir(f"{images_path}/tr")
-    if not os.path.isdir(export_path):
-        os.mkdir(export_path)
-
-    # # #  блок импорта данных из уже подготовленных (вычисленных) файлов
-
-    # fn = export_path + '/'
-    # file_list = [
-    #     'Day 31-13 F_1_Z_3_14223435365765858687_(0 4031).csv',
-    #     'Day 31-13 F_3_Z_5_291304329330331350362388389390_(0 4031).csv',
-    #     'Day 31-13 F_3_Z_9_295296341342343358400401402_(0 4031).csv',
-    #     # 'Day 1-6 (28-2) zone 3_16-25_0-449919.csv',
-    #     # 'Day 1-6 (28-2) zone 4_25-34_0-449919.csv',
-    #     # 'Day 1-6 (28-2) zone 5_34-47_0-449919.csv',
-    #     # 'Day 1-6 (28-2) zone 6_47-51_0-449919.csv'
-    # ]
-    # lbs = ['31 Tu.', '1 We.', '2 Th.', '3 Fr.', '4 Sa.', '5 Su.',
-    #        '6 Mo.', '7 Tu.', '8 We.', '9 Th.', '10 Fr.', '11 Sa.', '12 Su.',
-    #        '13 Tu.']
-    # for fnn in file_list:
-    #     file_name = fnn[0:-4]
-    #     c, v, t = import_from_csv(fn + fnn)
-    #     pretty_plot(c, v, t, file_name, lbs, images_path)
-    #     # pretty_triang_plot(c, v, t, file_name, lbs)
-    #     pretty_delaunay(c, v, t, file_name, lbs, images_path)
-    #     pretty_t_path(c, v, t, file_name, lbs, images_path)
-    # exit(0)
-    # # # конец блока
-
     # Выбор метода
     # 0 - МЕТОД РАСЧЕТА МЕТРИКИ НА ОСНОВЕ ОБЩЕЙ ПЛОЩАДИ ТРЕУГОЛЬНИКОВ, ПОЛУЧЕННЫХ ТРИАНГУЛЯЦИЕЙ ДЕЛОНЕ
-    # 1 - ММЕТОД ПОСЛЕДОВАТЕЛЬНОЙ ТРИАНГУЛЯЦИИ для оценки поведения системы на интервале
+    # 1 - МЕТОД ПОСЛЕДОВАТЕЛЬНОЙ ТРИАНГУЛЯЦИИ для оценки поведения системы на интервале
     method = args["method"]
-    print(f"Метод - {method}")
-    fnames = list()
-    for filename in args["file_names"]:
-        fnames.append(str(pathlib.Path(filename).resolve()))
+    print(f"Ⓜ Метод - {method}")
 
-    ## МЕТОД РАСЧЕТА МЕТРИКИ НА ОСНОВЕ ОБЩЕЙ ПЛОЩАДИ ТРЕУГОЛЬНИКОВ,
-    # ПОЛУЧЕННЫХ ТРИАНГУЛЯЦИЕЙ ДЕЛОНЕ
-    if method == 0:
-        # данные для файла bldg-MC2.csv
-        # можно не использовать, поскольку в методе first_row_handler_0
-        # происходит авто формирование конфигурации данных только для зон 'F_1_Z_3', 'F_3_Z_5',  'F_3_Z_9' (можно убрать)
-        # Метод first_row_handler_0  формирует автоматически конфигурации данных для всех зон с учетом их названий
-        # а здесь просто ограничиваются области для загрузки данных
-        data_grid = [
-            # ["Day 31-13 test", [0, 100], [(0, 4031)]],
-            # ["Day 31-13 all", [(0, 415)], [(0, 4031)]],
-            # ["Day 31-13 F_1", [(12, 104)], [(0, 4031)]],
-            # ["Day 31-13 F_2", [(104, 284)], [(0, 4031)]],
-            # ["Day 31-13 F_3", [(284, 415)], [(0, 4031)]],
-            # ["Day 31-13 F_1+", [(0, 12), (12, 104)], [(0, 4031)]],
-            # ["Day 31-13 F_2+", [(0, 12), (104, 284)], [(0, 4031)]],
-            # ["Day 31-13 F_3+", [(0, 12), (284, 415)], [(0, 4031)]],
-        ]
-        lbs = [
-            "31 Tu.",
-            "1 We.",
-            "2 Th.",
-            "3 Fr.",
-            "4 Sa.",
-            "5 Su.",
-            "6 Mo.",
-            "7 Tu.",
-            "8 We.",
-            "9 Th.",
-            "10 Fr.",
-            "11 Sa.",
-            "12 Su.",
-            "13 Tu.",
-        ]
-        # fnames = ["/home/urukov/src/src_data/bldg-MC2.csv"]
-        settings = [None]
-        alg_s = [read_row_callback_2, ",", first_row_handler_0]
-        prepare_data_per_days = prepare_data_per_days_0
-        days = [
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-            [0, 1, 2, 3, 6, 7, 8, 9, 10, 13],
-            [0, 1, 2, 3],
-            [6, 13],
-            [0, 7],
-            [1, 8],
-            [2, 9],
-            [3, 10],
-            [4, 11],
-            [5, 12],
-            [4, 5, 11, 12],
-            [6, 7, 8, 9, 10],
-        ]
-        ######
-
-    ## МЕТОД ПОСЛЕДОВАТЕЛЬНОЙ ТРИАНГУЛЯЦИИ
-    if method == 1:
-        # настройка данных для обработки
-        # - label
-        # - номера столбцов для захвата данных (диапазон)
-        # - номера строк для захвата данных (диапазон) без учета заголовка
-        data_grid = [
-            ["All", [(1, 13)], [(0, 7200)]],
-        ]
-
-        # файлы для обработки:
-        # в каждом файле данные на интервале 1 час (7200 отсчетов)
-        # fnames = [
-        #     "src_data/attack/All_Attack_DataSet.csv",
-        #     "src_data/attack/0_5_Attack_DataSet.csv",
-        #     "src_data/attack/0_4_Attack_DataSet.csv",
-        #     "src_data/attack/0_3_Attack_DataSet.csv",
-        #     "src_data/attack/0_2_Attack_DataSet.csv",
-        #     "src_data/attack/0_1_Attack_DataSet.csv",
-        # ]
-        lbs = []
-        # настройки алгоритма:
-        # - число последовательной обрабатываемых точек
-        # - размер скользящего окна фильтрации
-        # - фильтр
-        settings = [
-            # (2, 60, np.average),
-            # (2, 120, np.average),
-            # (2, 60, np.median),
-            # (2, 120, np.median),
-            # (3, None, None),
-            (3, 60, np.average),
-            # (3, 60, np.median),
-            # (3, 120, np.average),
-            # (3, 120, np.median),
-            # (3, 240, np.average),
-            # (3, 240, np.median),
-            # (4, 60, np.average),
-            # (4, 120, np.average),
-            # (4, 60, np.median),
-            # (4, 120, np.median),
-        ]
-        alg_s = [read_row_callback_3, ";", None]
-        prepare_data_per_days = prepare_data_per_days_1
-    #####
-
-    t1 = time()
-    t_total = time()
-
+    # fname - os.DirEntry
+    fnames = os.scandir(args["import_dir"])
     for fname in fnames:
-        if len(data_grid) > 0:
-            data_grid[0][0] = ntpath.basename(fname).split(".")[0]
-        result_grid, add_data_grid = read_csv(
-            data_grid, fname, alg_s[0], alg_s[1], alg_s[2]
+
+        df = pd.read_pickle(fname.path)
+
+        print(f"👀 Посмотрим датафрейм {fname.name}")
+
+        # Пока файл будет рандомное имя иметь, потому что я не понял по какому принципу
+        # файлы называются в исходнике
+        file_name = "%s %s" % (
+            time.strftime("%a, %d %b %H:%M"),
+            np.random.randint(1000),
         )
 
-        print("result_grid", result_grid, "add_data_grid", add_data_grid)
-        print(f"Read file time {time() - t1}")
+        # Вычислим PCA по данным датасета
+        print(f"1️⃣ Считаем PCA на массиве данных размером {df.shape}")
+        pca_result = PCA(n_components=2).fit_transform(df)
 
-        # формирование шаблона имени файлов-результатов
-        for grid in result_grid:
-            dg = grid["DG"]
-            file_name = f"{dg[0]}_"
-            for el in dg[1]:
-                if type(el) is tuple:
-                    min_m, max_m = el
-                    file_name += f"({min_m} {max_m})"
-                else:
-                    file_name += f"{el}"
-            file_name += "_"
-            for min_n, max_n in dg[2]:
-                file_name += f"({min_n} {max_n})"
+        # if method == CalcMethod.DELAUNAY:
+        #     pretty_delaunay(pca_result, None, None, file_name, [], images_path)
 
-            t1 = time()
+        # for i_st, st in enumerate(settings):
+        #     ###### t-sne
+        #     # блок обработки данных алгоритмом TSNE
+        #     # нужно выбрать либо TSNE, либо PCA
+        #     # digits_proj = TSNE(random_state=RS,
+        #     #                    n_iter=1000,
+        #     #                    perplexity=30).fit_transform(grid['D'])
+        #     # print(f'TSNE for {file_name} {time() - t1}')
+        #     ######
 
-            for i_st, st in enumerate(settings):
-                ###### t-sne
-                # блок обработки данных алгоритмом TSNE
-                # нужно выбрать либо TSNE, либо PCA
-                # digits_proj = TSNE(random_state=RS,
-                #                    n_iter=1000,
-                #                    perplexity=30).fit_transform(grid['D'])
-                # print(f'TSNE for {file_name} {time() - t1}')
-                ######
+        #     ##### PCA
+        #     # блок обработки данных алгоритмом PCA
+        #     # нужно выбрать либо TSNE, либо PCA
+        #     digits_proj = PCA(n_components=2).fit_transform(grid["D"])
+        #     print(f"PCA for {file_name} {time() - t1}")
+        #     ######
 
-                ##### PCA
-                # блок обработки данных алгоритмом PCA
-                # нужно выбрать либо TSNE, либо PCA
-                digits_proj = PCA(n_components=2).fit_transform(grid["D"])
-                print(f"PCA for {file_name} {time() - t1}")
-                ######
+        #     # формирует файл с данными после сокращения размерности
+        #     pretty_export(digits_proj, grid["V"], grid["T"], file_name, export_path)
+        #     # строит для каждого дня отдельный график, при этом можно включить наложение остальных дней
+        #     # для удобства сравнения, + временная шкала
+        #     # pretty_plot(digits_proj, grid['V'], grid['T'], file_name, lbs, images_path, True)
 
-                # формирует файл с данными после сокращения размерности
-                pretty_export(digits_proj, grid["V"], grid["T"], file_name, export_path)
-                # строит для каждого дня отдельный график, при этом можно включить наложение остальных дней
-                # для удобства сравнения, + временная шкала
-                # pretty_plot(digits_proj, grid['V'], grid['T'], file_name, lbs, images_path, True)
+        #     ## Для "МЕТОД РАСЧЕТА МЕТРИКИ НА ОСНОВЕ ОБЩЕЙ ПЛОЩАДИ ТРЕУГОЛЬНИКОВ, ПОЛУЧЕННЫХ ТРИАНГУЛЯЦИЕЙ ДЕЛОНЕ"
+        #     if method == 0:
+        #         # алгоритм поледовательного вычисления площадей треугольников делоне для каждого дня,
+        #         # с построением графиков одного дня (с временем), выполняется сравнение (наложение) дней,
+        #         # это конфигурируется в массиве days
+        #         # - можно оценить/сравнить, насколько и чем отличаются дни
+        #         # pretty_triang_plot(digits_proj, grid['V'], grid['T'], file_name, lbs, images_path)
 
-                ## Для "МЕТОД РАСЧЕТА МЕТРИКИ НА ОСНОВЕ ОБЩЕЙ ПЛОЩАДИ ТРЕУГОЛЬНИКОВ, ПОЛУЧЕННЫХ ТРИАНГУЛЯЦИЕЙ ДЕЛОНЕ"
-                if method == 0:
-                    # алгоритм поледовательного вычисления площадей треугольников делоне для каждого дня,
-                    # с построением графиков одного дня (с временем), выполняется сравнение (наложение) дней,
-                    # это конфигурируется в массиве days
-                    # - можно оценить/сравнить, насколько и чем отличаются дни
-                    # pretty_triang_plot(digits_proj, grid['V'], grid['T'], file_name, lbs, images_path)
+        #         # алгоритм вычисления площади всех треугольников делоне для каждого дня, получение значения метрики
+        #         # с построением графика всех дней
+        #         # - можно сравнить все дни между собой
+        #         # ELCONRUS
+        #         pretty_delaunay(
+        #             digits_proj, grid["V"], grid["T"], file_name, lbs, images_path
+        #         )
 
-                    # алгоритм вычисления площади всех треугольников делоне для каждого дня, получение значения метрики
-                    # с построением графика всех дней
-                    # - можно сравнить все дни между собой
-                    # ELCONRUS
-                    pretty_delaunay(
-                        digits_proj, grid["V"], grid["T"], file_name, lbs, images_path
-                    )
+        #         # алгоритм поледовательного вычисления площади треугольников делоне для каждого дня
+        #         # их суммирование, получение значения метрики
+        #         # с построением графика всех дней
+        #         # - можно сравнить все дни между собой, выявить что-нибудь интересное
+        #         # pretty_t_path(digits_proj, grid['V'], grid['T'], file_name, lbs, images_path)
 
-                    # алгоритм поледовательного вычисления площади треугольников делоне для каждого дня
-                    # их суммирование, получение значения метрики
-                    # с построением графика всех дней
-                    # - можно сравнить все дни между собой, выявить что-нибудь интересное
-                    # pretty_t_path(digits_proj, grid['V'], grid['T'], file_name, lbs, images_path)
+        #     ## Для "МЕТОД ПОСЛЕДОВАТЕЛЬНОЙ ТРИАНГУЛЯЦИИ"
+        #     if method == 1:
+        #         # алгоритм последовательной триангуляции с вычислением соответсвующей метрики
+        #         # на всех данных с формированием графика всех данных со шкалой времени в минутах
+        #         # - можно оценить поведение системы на всем интервале времени и выявить аномальные паттерны
+        #         # MECO
+        #         pretty_ntriang_path(
+        #             digits_proj,
+        #             grid["V"],
+        #             grid["T"],
+        #             file_name,
+        #             images_path,
+        #             i_st,
+        #             st,
+        #         )
 
-                ## Для "МЕТОД ПОСЛЕДОВАТЕЛЬНОЙ ТРИАНГУЛЯЦИИ"
-                if method == 1:
-                    # алгоритм последовательной триангуляции с вычислением соответсвующей метрики
-                    # на всех данных с формированием графика всех данных со шкалой времени в минутах
-                    # - можно оценить поведение системы на всем интервале времени и выявить аномальные паттерны
-                    # MECO
-                    pretty_ntriang_path(
-                        digits_proj,
-                        grid["V"],
-                        grid["T"],
-                        file_name,
-                        images_path,
-                        i_st,
-                        st,
-                    )
-
-    print(f"Total time {time() - t_total}")
-    print("End Program")
