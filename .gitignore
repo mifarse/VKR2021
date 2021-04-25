@@ -3,5 +3,4 @@ __pycache__
 shulepov/.ipynb_checkpoints
 shulepov/__pycache__
 .utils_cache
-.vscode/.ropeproject/objectdb
-.vscode/settings.json
+.vscode
