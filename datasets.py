@@ -42,7 +42,7 @@ class Datasets:
             try:
                 iter_ds = pd.read_pickle(str(filepath) % ur["name_opc"])
             except FileNotFoundError:
-                print(f"🙄 Файл не найден - {ur['name_opc']}. Ну и фиг с ним.")
+                print(f"🙄 Файл не найден - {ur['name_opc']}.")
                 continue
             iter_ds.rename(
                 columns={"value": column_name % ur["hmi_unit_number"]}, inplace=True

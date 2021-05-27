@@ -53,6 +53,15 @@ class PCAMetric:
     def __init__(self, df):
         self.df = df
 
+    def by_hours(self):
+        return [PCAMetric(g) for n, g in self.df.groupby(pd.Grouper(freq="H"))]
+
+    def by_quadro_hours(self):
+        return [PCAMetric(g) for n, g in self.df.groupby(pd.Grouper(freq="4H"))]
+
+    def by_days(self):
+        return [PCAMetric(g) for n, g in self.df.groupby(pd.Grouper(freq="4H"))]
+
     def by_weeks(self):
         """Returns list of dataframes, grouped by week.
 
